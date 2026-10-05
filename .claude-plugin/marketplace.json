@@ -1,0 +1,17 @@
+{
+  "name": "aikazu",
+  "description": "Plugins by Iqbal Attila (aikazu).",
+  "owner": {
+    "name": "Iqbal Attila",
+    "url": "https://github.com/aikazu"
+  },
+  "plugins": [
+    {
+      "name": "codex-mcp",
+      "source": "./",
+      "description": "Delegate coding work and image generation to OpenAI Codex through your own ChatGPT/Codex subscription.",
+      "category": "development",
+      "tags": ["codex", "openai", "delegation", "images", "mcp"]
+    }
+  ]
+}

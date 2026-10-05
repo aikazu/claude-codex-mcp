@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "codex": {
+      "command": "node",
+      "args": ["/absolute/path/to/claude-codex-mcp/src/cli.mjs"],
+      "env": {
+        "CODEX_BIN": "/absolute/path/to/codex",
+        "CODEX_MCP_SANDBOX": "workspace-write",
+        "CODEX_MCP_ASSET_DIR": "/absolute/path/to/assets"
+      }
+    }
+  }
+}

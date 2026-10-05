@@ -1,0 +1,32 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you asked Claude, what you expected, what you got.
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of `node src/cli.mjs --check`
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      options: [Claude Desktop (Chat), Claude Desktop (Cowork), Claude Code, Other MCP client]
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11 / macOS 26 / Ubuntu 24.04
+    validations:
+      required: true

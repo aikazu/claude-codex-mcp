@@ -1,0 +1,20 @@
+{
+  "name": "codex-mcp",
+  "displayName": "Codex for Claude",
+  "version": "1.0.0",
+  "description": "Delegate coding work and image generation to OpenAI Codex through your own ChatGPT/Codex subscription (Codex CLI, no API key).",
+  "author": {
+    "name": "Iqbal Attila",
+    "url": "https://github.com/aikazu"
+  },
+  "homepage": "https://github.com/aikazu/claude-codex-mcp",
+  "repository": "https://github.com/aikazu/claude-codex-mcp",
+  "license": "MIT",
+  "keywords": ["codex", "openai", "delegation", "image-generation", "mcp"],
+  "mcpServers": {
+    "codex": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/src/cli.mjs"]
+    }
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "name": "@aikazu/claude-codex-mcp",
+  "version": "1.0.0",
+  "description": "MCP server that lets Claude delegate coding work and image generation to OpenAI Codex through the Codex CLI and your own ChatGPT/Codex subscription. Zero dependencies, Windows-first, works in Claude Desktop, Cowork and Claude Code.",
+  "type": "module",
+  "bin": {
+    "claude-codex-mcp": "src/cli.mjs"
+  },
+  "files": [
+    "src/",
+    "scripts/",
+    "skills/",
+    ".claude-plugin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "check": "node src/cli.mjs --check",
+    "test": "node --test --test-reporter=spec test/unit.test.mjs test/server.test.mjs",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "claude-desktop",
+    "codex",
+    "openai",
+    "chatgpt",
+    "gpt-image",
+    "image-generation",
+    "agent",
+    "delegation"
+  ],
+  "author": "Iqbal Attila (https://kcmon.id)",
+  "license": "MIT",
+  "homepage": "https://github.com/aikazu/claude-codex-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aikazu/claude-codex-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aikazu/claude-codex-mcp/issues"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15"
+  }
+}

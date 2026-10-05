@@ -1,0 +1,274 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { after, before, describe, test } from "node:test";
+import { Client, makeEnv } from "./helpers.mjs";
+
+describe("MCP protocol", () => {
+  let ctx;
+  let client;
+  before(async () => {
+    ctx = makeEnv();
+    client = new Client(ctx.env);
+  });
+  after(() => client.close());
+
+  test("initialize negotiates the protocol and names the server", async () => {
+    const r = await client.init();
+    assert.equal(r.protocolVersion, "2025-06-18");
+    assert.equal(r.serverInfo.name, "codex");
+    assert.ok(r.capabilities.tools);
+    assert.match(r.instructions, /codex_task/);
+  });
+
+  test("tools/list exposes the five tools with schemas", async () => {
+    const r = await client.request("tools/list");
+    const names = r.result.tools.map((t) => t.name).sort();
+    assert.deepEqual(names, ["codex_image", "codex_job", "codex_jobs", "codex_models", "codex_task"]);
+    for (const t of r.result.tools) assert.equal(t.inputSchema.type, "object");
+  });
+
+  test("unknown methods return JSON-RPC errors, unknown tools return tool errors", async () => {
+    const m = await client.request("nope/nope");
+    assert.equal(m.error.code, -32601);
+    const t = await client.call("does_not_exist");
+    assert.equal(t.isError, true);
+    assert.match(t.text, /Unknown tool/);
+  });
+
+  test("ping", async () => {
+    const r = await client.request("ping");
+    assert.deepEqual(r.result, {});
+  });
+});
+
+describe("codex_task", () => {
+  let ctx;
+  let client;
+  before(async () => {
+    ctx = makeEnv();
+    client = new Client(ctx.env);
+    await client.init();
+  });
+  after(() => client.close());
+
+  test("runs codex exec in cwd, sends the prompt over stdin, returns the final message", async () => {
+    const r = await client.call("codex_task", { prompt: "Explain the repo", cwd: ctx.project });
+    assert.equal(r.isError, false);
+    assert.equal(r.json.status, "completed");
+    assert.match(r.json.final_message, /^final for thread-/);
+    assert.ok(r.json.session_id);
+    assert.deepEqual(r.json.usage, { input_tokens: 12, output_tokens: 3 });
+
+    const call = ctx.calls().at(-1);
+    assert.equal(call.input, "Explain the repo");
+    assert.equal(fs.realpathSync(call.cwd), fs.realpathSync(ctx.project));
+    assert.deepEqual(call.args.slice(0, 7), [
+      "exec",
+      "--json",
+      "--skip-git-repo-check",
+      "-C",
+      ctx.project,
+      "-s",
+      "workspace-write",
+    ]);
+    assert.ok(!call.args.includes("Explain the repo"), "prompt must not be on argv");
+  });
+
+  test("passes model, effort, network, images and add_dirs", async () => {
+    const img = path.join(ctx.base, "shot.png");
+    fs.writeFileSync(img, "x");
+    await client.call("codex_task", {
+      prompt: "x",
+      cwd: ctx.project,
+      model: "fake-pro",
+      reasoning_effort: "ULTRA",
+      network: true,
+      images: [img],
+      add_dirs: [ctx.base],
+    });
+    const { args } = ctx.calls().at(-1);
+    const joined = args.join(" ");
+    assert.match(joined, /-m fake-pro/);
+    assert.match(joined, /-c model_reasoning_effort="ultra"/);
+    assert.match(joined, /-c sandbox_workspace_write\.network_access=true/);
+    assert.match(joined, new RegExp(`--add-dir ${ctx.base.replace(/\\/g, "\\\\")}`));
+    assert.equal(args[args.indexOf("-i") + 1], img);
+  });
+
+  test("resumes a session via `exec resume` with sandbox through config", async () => {
+    const r = await client.call("codex_task", { prompt: "continue", session_id: "abc-123", sandbox: "read-only" });
+    assert.equal(r.json.session_id, "abc-123");
+    const { args } = ctx.calls().at(-1);
+    assert.deepEqual(args.slice(0, 3), ["exec", "resume", "abc-123"]);
+    assert.ok(args.includes('sandbox_mode="read-only"'));
+    assert.ok(!args.includes("-C"));
+  });
+
+  test("validates input before spawning anything", async () => {
+    const before = ctx.calls().length;
+    for (const [args, re] of [
+      [{ prompt: "x" }, /cwd is required/],
+      [{ prompt: "x", cwd: path.join(ctx.base, "missing") }, /cwd not found/],
+      [{ prompt: "x", cwd: ctx.project, sandbox: "danger-full-access" }, /sandbox must be one of/],
+      [{ prompt: "x", cwd: ctx.project, reasoning_effort: 'high" --evil' }, /invalid reasoning_effort/],
+      [{ prompt: "x", cwd: ctx.project, model: "a b" }, /invalid model/],
+      [{ prompt: "x", session_id: "../etc" }, /invalid session_id/],
+      [{ prompt: "   ", cwd: ctx.project }, /prompt is required/],
+    ]) {
+      const r = await client.call("codex_task", args);
+      assert.equal(r.isError, true, JSON.stringify(args));
+      assert.match(r.text, re);
+    }
+    assert.equal(ctx.calls().length, before);
+  });
+
+  test("surfaces Codex failures", async () => {
+    const r = await client.call("codex_task", { prompt: "FAIL now", cwd: ctx.project });
+    assert.equal(r.isError, true);
+    assert.equal(r.json.status, "failed");
+    assert.deepEqual(r.json.errors, ["You've hit your usage limit."]);
+    assert.match(r.json.stderr_tail, /simulated failure/);
+  });
+});
+
+describe("jobs", () => {
+  let ctx;
+  let client;
+  before(async () => {
+    ctx = makeEnv();
+    client = new Client(ctx.env);
+    await client.init();
+  });
+  after(() => client.close());
+
+  test("long runs return a job_id that codex_job resolves, with progress notifications", async () => {
+    const r = await client.call("codex_task", { prompt: "SLOW job", cwd: ctx.project, wait_seconds: 0 });
+    assert.equal(r.json.status, "running");
+    const done = await client.call("codex_job", { job_id: r.json.job_id, wait_seconds: 30 }, { progressToken: "p1" });
+    assert.equal(done.json.status, "completed");
+    const progress = client.notifications.filter((n) => n.method === "notifications/progress");
+    assert.ok(progress.length >= 1, "expected at least one progress notification during a 4 s run");
+    for (const p of progress) assert.equal(p.params.progressToken, "p1");
+  });
+
+  test("cancel stops a running job", async () => {
+    const r = await client.call("codex_task", { prompt: "HANG", cwd: ctx.project, wait_seconds: 1 });
+    assert.equal(r.json.status, "running");
+    const c = await client.call("codex_job", { job_id: r.json.job_id, cancel: true });
+    assert.equal(c.json.status, "cancelled");
+  });
+
+  test("codex_jobs lists what ran", async () => {
+    const r = await client.call("codex_jobs");
+    assert.ok(Array.isArray(r.json));
+    assert.ok(r.json.some((j) => j.status === "cancelled"));
+  });
+
+  test("unknown job ids are an error", async () => {
+    const r = await client.call("codex_job", { job_id: "nope" });
+    assert.equal(r.isError, true);
+  });
+});
+
+describe("codex_image", () => {
+  let ctx;
+  let client;
+  before(async () => {
+    ctx = makeEnv();
+    client = new Client(ctx.env);
+    await client.init();
+  });
+  after(() => client.close());
+
+  test("copies generated images into out_dir and returns previews", async () => {
+    const out = path.join(ctx.base, "icons");
+    const r = await client.call("codex_image", {
+      prompt: "Gold coin icon",
+      name: "coin",
+      count: 3,
+      transparent: true,
+      size: "1024x1024",
+      out_dir: out,
+    });
+    assert.equal(r.json.status, "completed", r.text);
+    assert.deepEqual(
+      r.json.files.map((f) => path.basename(f)),
+      ["coin.png", "coin-2.png", "coin-3.png"],
+    );
+    for (const f of r.json.files) assert.ok(fs.existsSync(f));
+    assert.equal(r.images.length, 3);
+    assert.equal(r.images[0].mimeType, "image/png");
+
+    const call = ctx.calls().at(-1);
+    assert.match(call.input, /^\$imagegen /);
+    assert.match(call.input, /create 3 images/);
+    assert.match(call.input, /transparent/);
+    assert.ok(call.args.includes("read-only"));
+  });
+
+  test("never overwrites existing files and defaults to the asset dir", async () => {
+    await client.call("codex_image", { prompt: "Gold coin icon", name: "coin", out_dir: path.join(ctx.base, "icons") });
+    assert.ok(fs.existsSync(path.join(ctx.base, "icons", "coin-4.png")));
+    const r = await client.call("codex_image", { prompt: "Sprite sheet!", return_images: false });
+    assert.equal(path.dirname(r.json.files[0]), ctx.env.CODEX_MCP_ASSET_DIR);
+    assert.equal(path.basename(r.json.files[0]), "sprite-sheet.png");
+    assert.equal(r.images.length, 0);
+  });
+
+  test("image jobs are serialized so outputs are attributed correctly", async () => {
+    const a = await client.call("codex_image", { prompt: "SLOW one", name: "a", wait_seconds: 0 });
+    const b = await client.call("codex_image", { prompt: "second", name: "b", wait_seconds: 0 });
+    assert.equal(a.json.status, "running");
+    assert.equal(b.json.status, "queued");
+    const ra = await client.call("codex_job", { job_id: a.json.job_id, wait_seconds: 30 });
+    const rb = await client.call("codex_job", { job_id: b.json.job_id, wait_seconds: 30 });
+    assert.deepEqual(
+      ra.json.files.map((f) => path.basename(f)),
+      ["a.png"],
+    );
+    assert.deepEqual(
+      rb.json.files.map((f) => path.basename(f)),
+      ["b.png"],
+    );
+  });
+});
+
+describe("codex_models", () => {
+  test("normalizes the catalog and reads the configured default", async () => {
+    const ctx = makeEnv();
+    fs.writeFileSync(
+      path.join(ctx.env.CODEX_HOME, "config.toml"),
+      'model = "fake-pro"\nmodel_reasoning_effort = "high"\n\n[profiles.fast]\nmodel = "other"\n',
+    );
+    const client = new Client(ctx.env);
+    await client.init();
+    const r = await client.call("codex_models");
+    assert.equal(r.json.catalog, "live");
+    assert.deepEqual(r.json.configured_default, { model: "fake-pro", reasoning_effort: "high" });
+    assert.deepEqual(r.json.models, [
+      {
+        model: "fake-pro",
+        name: "Fake Pro",
+        description: "Big model",
+        reasoning_efforts: ["low", "medium", "ultra"],
+        default_effort: "medium",
+      },
+    ]);
+    const all = await client.call("codex_models", { include_hidden: true });
+    assert.equal(all.json.models.length, 2);
+    await client.close();
+  });
+});
+
+describe("missing Codex", () => {
+  test("tool calls fail with an actionable message", async () => {
+    const ctx = makeEnv({ CODEX_BIN: path.join(makeEnv().base, "nope", "codex") });
+    const client = new Client(ctx.env);
+    await client.init();
+    const r = await client.call("codex_task", { prompt: "x", cwd: ctx.project });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /CODEX_BIN=.* is not runnable/);
+    await client.close();
+  });
+});
