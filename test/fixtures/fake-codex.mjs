@@ -3,7 +3,9 @@
 // `codex exec --json` that the server relies on and records each invocation
 // to $FAKE_CODEX_LOG so tests can assert on argv, cwd and stdin.
 //
-// Prompt keywords: FAIL → turn.failed + exit 1, SLOW → 4 s delay, HANG → never exits.
+// Prompt keywords: FAIL → turn.failed + exit 1, SLOW → 4 s delay, HANG → never exits,
+// LOOSE → images land outside the thread folder and are not reported, while
+// another session (e.g. the Codex desktop app) writes one at the same time.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -67,12 +69,19 @@ function run(input) {
   setTimeout(() => {
     if (input.includes("$imagegen")) {
       const n = Number.parseInt(input.match(/create (\d+) image/)?.[1] ?? "1", 10);
-      const dir = path.join(process.env.CODEX_HOME, "generated_images", tid);
+      const loose = input.includes("LOOSE");
+      const root = path.join(process.env.CODEX_HOME, "generated_images");
+      const dir = path.join(root, loose ? "loose" : tid);
       fs.mkdirSync(dir, { recursive: true });
       for (let i = 0; i < n; i++) {
         const p = path.join(dir, `ig_${i}.png`);
         fs.writeFileSync(p, PNG_1PX);
-        emit({ type: "item.completed", item: { type: "image_generation", saved_path: p } });
+        if (!loose) emit({ type: "item.completed", item: { type: "image_generation", saved_path: p } });
+      }
+      if (loose) {
+        const other = path.join(root, "0199bbbb-cccc-7ddd-8eee-ffff00001111");
+        fs.mkdirSync(other, { recursive: true });
+        fs.writeFileSync(path.join(other, "foreign.png"), PNG_1PX);
       }
     }
     if (input.includes("FAIL")) {

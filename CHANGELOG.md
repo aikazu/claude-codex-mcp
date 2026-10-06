@@ -17,6 +17,9 @@ All notable changes to this project are documented here. The format follows
 - Resuming a session without `cwd` ran Codex in the home folder, which `workspace-write` then made writable. Resume now
   runs in the folder the session started in (remembered by the server, or read from Codex's session metadata), reapplies
   its `add_dirs`, and refuses when the folder is unknown.
+- When an image job's files could not be tied to its Codex thread, the fallback copied every new image in
+  `generated_images`, including other Codex clients' output. It now skips other threads' folders and keeps at most
+  `count` files.
 
 ## [1.0.0] - 2026-10-05
 

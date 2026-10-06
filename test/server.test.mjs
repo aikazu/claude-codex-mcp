@@ -251,6 +251,21 @@ describe("codex_image", () => {
     assert.equal(r.images.length, 0);
   });
 
+  test("unattributed images never include another session's output", async () => {
+    const r = await client.call("codex_image", {
+      prompt: "LOOSE banner",
+      name: "loose",
+      count: 2,
+      out_dir: path.join(ctx.base, "loose"),
+      return_images: false,
+    });
+    assert.equal(r.json.status, "completed", r.text);
+    assert.deepEqual(
+      r.json.files.map((f) => path.basename(f)),
+      ["loose.png", "loose-2.png"],
+    );
+  });
+
   test("image jobs are serialized so outputs are attributed correctly", async () => {
     const a = await client.call("codex_image", { prompt: "SLOW one", name: "a", wait_seconds: 0 });
     const b = await client.call("codex_image", { prompt: "second", name: "b", wait_seconds: 0 });

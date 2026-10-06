@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 export const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const THREAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" };
 
 export function walkImages(dir, sinceMs, out = []) {
@@ -65,6 +66,20 @@ export function collectImages(job, generatedImagesDir) {
   const mentioned = new Set([...job.mentionedPaths].map((m) => path.resolve(m)));
   const mine = list.filter((f) => mentioned.has(path.resolve(f.p)) || (job.sessionId && f.p.includes(job.sessionId)));
   if (mine.length) list = mine;
+  else {
+    // Nothing is tied to this job. CODEX_HOME is shared with other Codex
+    // clients (e.g. the desktop app), so skip other threads' folders and keep
+    // only the newest files this job asked for.
+    const foreign = (p) =>
+      path
+        .relative(generatedImagesDir, p)
+        .split(/[\\/]/)
+        .some((seg) => THREAD_ID_RE.test(seg) && seg !== job.sessionId);
+    list = list
+      .filter((f) => !foreign(f.p))
+      .sort((a, b) => b.mtime - a.mtime)
+      .slice(0, job.meta.count ?? list.length);
+  }
   list.sort((a, b) => a.mtime - b.mtime);
 
   fs.mkdirSync(job.meta.outDir, { recursive: true });
