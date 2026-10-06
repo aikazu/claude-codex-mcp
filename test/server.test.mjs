@@ -147,10 +147,11 @@ describe("codex_task", () => {
     assert.equal(spawnSync("git", ["init", "-q", repo]).status, 0);
     fs.writeFileSync(path.join(repo, "untouched.txt"), "dirty before the task");
     const out = path.join(repo, "codex-out.txt");
+    // .native also expands Windows 8.3 names (CI's temp dir is C:\Users\RUNNER~1\…; git reports the long form).
     const same = (list, files) =>
       assert.deepEqual(
-        list.map((f) => fs.realpathSync(f)),
-        files.map((f) => fs.realpathSync(f)),
+        list.map((f) => fs.realpathSync.native(f)),
+        files.map((f) => fs.realpathSync.native(f)),
       );
 
     const first = await client.call("codex_task", { prompt: "WRITE a file", cwd: repo });
