@@ -1,12 +1,12 @@
 // MCP tool definitions and handlers.
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { MAX_WAIT_SECONDS, SANDBOXES } from "./config.mjs";
 import { buildImagePrompt, collectImages, previewContent } from "./images.mjs";
 import { tail } from "./jobs.mjs";
 import { listModels } from "./models.mjs";
+import { SessionStore } from "./sessions.mjs";
 
 const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
 const strList = (v) =>
@@ -42,32 +42,61 @@ function modelArg(value) {
   return ["-m", model];
 }
 
-/** Build `codex exec` argv for a delegated task. Pure apart from path checks. */
-export function buildTaskArgs(a, config) {
+const isDir = (p) => {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Build `codex exec` argv for a delegated task. Pure apart from path checks.
+ * @param {{lookup: (id: string) => {cwd: string, addDirs: string[]} | undefined}} [sessions]
+ */
+export function buildTaskArgs(a, config, sessions) {
   if (!str(a.prompt)) throw new ToolError("prompt is required");
   const sessionId = str(a.session_id);
   if (sessionId && !/^[\w-]+$/.test(sessionId)) throw new ToolError(`invalid session_id: ${sessionId}`);
   if (a.sandbox !== undefined && !SANDBOXES.includes(a.sandbox))
     throw new ToolError(`sandbox must be one of: ${SANDBOXES.join(", ")}`);
   const sandbox = a.sandbox ?? config.defaultSandbox;
-  const cwdIn = str(a.cwd);
-  if (!cwdIn && !sessionId) throw new ToolError("cwd is required for a new task (absolute path of the project folder)");
-  const cwd = cwdIn ? existingPath(cwdIn, "cwd", { dir: true }) : os.homedir();
+  const known = sessionId ? sessions?.lookup(sessionId) : undefined;
+  const cwdIn = str(a.cwd) ?? known?.cwd;
+  if (!cwdIn)
+    throw new ToolError(
+      sessionId
+        ? `cwd is required: the working folder of session ${sessionId} is unknown (pass the folder it ran in)`
+        : "cwd is required for a new task (absolute path of the project folder)",
+    );
+  const cwd = existingPath(cwdIn, "cwd", { dir: true });
+  // Folders remembered from the session are kept while they still exist;
+  // folders passed now must exist.
+  const addDirs = [
+    ...new Set([
+      ...(known?.addDirs ?? []).filter(isDir),
+      ...strList(a.add_dirs).map((d) => existingPath(d, "add_dir", { dir: true })),
+    ]),
+  ];
 
   const args = ["exec"];
   if (sessionId) args.push("resume", sessionId);
   args.push("--json", "--skip-git-repo-check");
-  // `exec resume` has no -s/-C flags; sandbox goes through config and the
-  // working directory through the process cwd.
-  if (sessionId) args.push("-c", `sandbox_mode="${sandbox}"`);
-  else args.push("-C", cwd, "-s", sandbox);
+  // `exec resume` has no -s/-C/--add-dir flags; sandbox and extra roots go
+  // through config and the working directory through the process cwd.
+  if (sessionId) {
+    args.push("-c", `sandbox_mode="${sandbox}"`);
+    if (addDirs.length && sandbox === "workspace-write")
+      args.push("-c", `sandbox_workspace_write.writable_roots=[${addDirs.map((d) => JSON.stringify(d)).join(",")}]`);
+  } else {
+    args.push("-C", cwd, "-s", sandbox);
+    for (const d of addDirs) args.push("--add-dir", d);
+  }
   if (a.network === true && sandbox === "workspace-write")
     args.push("-c", "sandbox_workspace_write.network_access=true");
   args.push(...modelArg(a.model), ...effortArg(a.reasoning_effort));
-  if (!sessionId)
-    for (const d of strList(a.add_dirs)) args.push("--add-dir", existingPath(d, "add_dir", { dir: true }));
   for (const img of strList(a.images)) args.push("-i", existingPath(img, "image"));
-  return { args, cwd, sandbox, sessionId };
+  return { args, cwd, sandbox, sessionId, addDirs };
 }
 
 /** Build `codex exec` argv + prompt for an image job. */
@@ -153,7 +182,11 @@ export function toolDefinitions(config) {
         type: "object",
         properties: {
           prompt: { type: "string", description: "Complete instructions for Codex." },
-          cwd: { type: "string", description: "Absolute path of the working folder (required for a new task)." },
+          cwd: {
+            type: "string",
+            description:
+              "Absolute path of the working folder. Required for a new task; when resuming, defaults to the folder the session ran in.",
+          },
           sandbox: {
             type: "string",
             enum: [...SANDBOXES],
@@ -172,7 +205,7 @@ export function toolDefinitions(config) {
           add_dirs: {
             type: "array",
             items: { type: "string" },
-            description: "Extra writable folders (new tasks only).",
+            description: "Extra writable folders. Remembered for the session and reapplied on resume.",
           },
           session_id: { type: "string", description: "Continue an earlier Codex session instead of starting fresh." },
           wait_seconds: wait,
@@ -257,16 +290,17 @@ export function toolDefinitions(config) {
 /**
  * @param {{config: object, jobs: import('./jobs.mjs').JobManager, launcher: () => object}} deps
  */
-export function createToolHandler({ config, jobs, launcher }) {
+export function createToolHandler({ config, jobs, launcher, sessions = new SessionStore(config.codexHome) }) {
   const handlers = {
     async codex_task(a, ctx) {
-      const { args, cwd, sandbox, sessionId } = buildTaskArgs(a, config);
+      const { args, cwd, sandbox, sessionId, addDirs } = buildTaskArgs(a, config, sessions);
       const job = jobs.submit({
         kind: "task",
         args,
         cwd,
         prompt: str(a.prompt),
         meta: { sandbox, resumeOf: sessionId },
+        onFinish: (j) => sessions.remember(j.sessionId, { cwd, addDirs }),
       });
       return resultFor(await jobs.wait(job, waitSeconds(a.wait_seconds, config), ctx.progress), config);
     },

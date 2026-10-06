@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- Resuming a session without `cwd` ran Codex in the home folder, which `workspace-write` then made writable. Resume now
+  runs in the folder the session started in (remembered by the server, or read from Codex's session metadata), reapplies
+  its `add_dirs`, and refuses when the folder is unknown.
+
 ## [1.0.0] - 2026-10-05
 
 ### Added

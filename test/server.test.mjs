@@ -96,13 +96,48 @@ describe("codex_task", () => {
     assert.equal(args[args.indexOf("-i") + 1], img);
   });
 
-  test("resumes a session via `exec resume` with sandbox through config", async () => {
-    const r = await client.call("codex_task", { prompt: "continue", session_id: "abc-123", sandbox: "read-only" });
-    assert.equal(r.json.session_id, "abc-123");
-    const { args } = ctx.calls().at(-1);
-    assert.deepEqual(args.slice(0, 3), ["exec", "resume", "abc-123"]);
-    assert.ok(args.includes('sandbox_mode="read-only"'));
-    assert.ok(!args.includes("-C"));
+  test("resumes a session in the folder it started in, with sandbox and extra roots through config", async () => {
+    const extra = path.join(ctx.base, "extra");
+    fs.mkdirSync(extra);
+    const first = await client.call("codex_task", { prompt: "start", cwd: ctx.project, add_dirs: [extra] });
+    const id = first.json.session_id;
+    const r = await client.call("codex_task", { prompt: "continue", session_id: id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(r.json.session_id, id);
+    const call = ctx.calls().at(-1);
+    assert.deepEqual(call.args.slice(0, 3), ["exec", "resume", id]);
+    assert.equal(fs.realpathSync(call.cwd), fs.realpathSync(ctx.project));
+    assert.ok(call.args.includes('sandbox_mode="workspace-write"'));
+    assert.ok(call.args.includes(`sandbox_workspace_write.writable_roots=[${JSON.stringify(extra)}]`));
+    assert.ok(!call.args.includes("-C"));
+
+    await client.call("codex_task", { prompt: "look", session_id: id, sandbox: "read-only" });
+    const ro = ctx.calls().at(-1).args;
+    assert.ok(ro.includes('sandbox_mode="read-only"'));
+    assert.ok(!ro.some((x) => x.startsWith("sandbox_workspace_write.writable_roots")));
+  });
+
+  test("resumes a session started elsewhere using Codex's rollout metadata", async () => {
+    const id = "0199aaaa-bbbb-7ccc-8ddd-eeeeffff0000";
+    const dir = path.join(ctx.env.CODEX_HOME, "sessions", "2026", "10", "01");
+    fs.mkdirSync(dir, { recursive: true });
+    const meta = { type: "session_meta", payload: { id, cwd: ctx.project } };
+    fs.writeFileSync(path.join(dir, `rollout-2026-10-01T10-00-00-${id}.jsonl`), `${JSON.stringify(meta)}\n{}\n`);
+    const r = await client.call("codex_task", { prompt: "continue", session_id: id });
+    assert.equal(r.isError, false, r.text);
+    assert.equal(fs.realpathSync(ctx.calls().at(-1).cwd), fs.realpathSync(ctx.project));
+  });
+
+  test("refuses to resume an unknown session without cwd instead of running in the home folder", async () => {
+    const before = ctx.calls().length;
+    const r = await client.call("codex_task", { prompt: "continue", session_id: "abc-123" });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /working folder of session abc-123 is unknown/);
+    assert.equal(ctx.calls().length, before);
+
+    const ok = await client.call("codex_task", { prompt: "continue", session_id: "abc-123", cwd: ctx.project });
+    assert.equal(ok.isError, false, ok.text);
+    assert.equal(fs.realpathSync(ctx.calls().at(-1).cwd), fs.realpathSync(ctx.project));
   });
 
   test("validates input before spawning anything", async () => {
