@@ -11,6 +11,8 @@ All notable changes to this project are documented here. The format follows
 - Server-side defaults for calls that omit `model` / `reasoning_effort`: `CODEX_MCP_TASK_MODEL`, `CODEX_MCP_TASK_EFFORT`,
   `CODEX_MCP_IMAGE_MODEL`, `CODEX_MCP_IMAGE_EFFORT` (installer: `--task-model` … / `-TaskModel` …). Shown by
   `codex_models` (`server_defaults`), `--check` and the tool descriptions.
+- `codex_task` results list `changed_files` for `workspace-write` runs inside a git repository, from `git status`
+  snapshots taken when the job starts and finishes, so the caller can review the diff without trusting Codex's report.
 - `codex_image` with `transparent: true` checks each PNG for an alpha channel and returns `warnings` for images that
   came back opaque (e.g. a painted checkerboard).
 

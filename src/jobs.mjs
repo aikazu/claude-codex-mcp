@@ -75,7 +75,7 @@ export class JobManager {
   }
 
   /** Register a job and start it as soon as a slot for its kind is free. */
-  submit({ kind, args, cwd, prompt, meta = {}, onFinish }) {
+  submit({ kind, args, cwd, prompt, meta = {}, onStart, onFinish }) {
     // Resolve the binary eagerly so a missing Codex fails the tool call itself.
     const launcher = this.launcher();
     const job = {
@@ -85,6 +85,7 @@ export class JobManager {
       cwd,
       prompt,
       meta,
+      onStart,
       onFinish,
       launcher,
       status: "queued",
@@ -127,6 +128,11 @@ export class JobManager {
     const outFile = path.join(tmpDir, "last-message.txt");
     job.status = "running";
     job.startedAt = Date.now();
+    try {
+      job.onStart?.(job);
+    } catch (e) {
+      job.warnings.push(`pre-processing: ${e.message}`);
+    }
     this.log(`job ${job.id} (${job.kind}) start: codex ${job.args.join(" ")}`);
 
     let child;

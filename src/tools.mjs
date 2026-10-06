@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { changedFiles, gitSnapshot } from "./changes.mjs";
 import { MAX_WAIT_SECONDS, SANDBOXES } from "./config.mjs";
 import { buildImagePrompt, collectImages, previewContent } from "./images.mjs";
 import { tail } from "./jobs.mjs";
@@ -17,6 +18,7 @@ const strList = (v) =>
         .filter(Boolean)
     : [];
 const EFFORT_RE = /^[a-z]+$/;
+const MAX_CHANGED_LISTED = 200;
 
 export class ToolError extends Error {}
 
@@ -143,6 +145,10 @@ export function summarize(job) {
   if (job.usage) s.usage = job.usage;
   if (job.errors.length) s.errors = job.errors;
   if (job.warnings?.length) s.warnings = job.warnings;
+  if (job.changedFiles) {
+    s.changed_files = job.changedFiles.slice(0, MAX_CHANGED_LISTED);
+    if (job.changedFiles.length > MAX_CHANGED_LISTED) s.changed_files_total = job.changedFiles.length;
+  }
   if (job.status === "failed" && job.stderr) s.stderr_tail = tail(job.stderr, 2500);
   if (job.kind === "task" && job.status === "completed" && job.sessionId)
     s.next = "Pass session_id to codex_task to continue this Codex session.";
@@ -308,7 +314,12 @@ export function createToolHandler({ config, jobs, launcher, sessions = new Sessi
         cwd,
         prompt: str(a.prompt),
         meta: { sandbox, resumeOf: sessionId },
-        onFinish: (j) => sessions.remember(j.sessionId, { cwd, addDirs }),
+        // Snapshot when the job actually starts: a queued job may wait while the user keeps editing.
+        onStart: sandbox === "workspace-write" ? (j) => (j.meta.gitBefore = gitSnapshot(cwd)) : undefined,
+        onFinish: (j) => {
+          sessions.remember(j.sessionId, { cwd, addDirs });
+          if (j.meta.gitBefore) j.changedFiles = changedFiles(j.meta.gitBefore, gitSnapshot(cwd));
+        },
       });
       return resultFor(await jobs.wait(job, waitSeconds(a.wait_seconds, config), ctx.progress), config);
     },

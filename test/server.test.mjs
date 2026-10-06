@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { after, before, describe, test } from "node:test";
@@ -138,6 +139,32 @@ describe("codex_task", () => {
     const ok = await client.call("codex_task", { prompt: "continue", session_id: "abc-123", cwd: ctx.project });
     assert.equal(ok.isError, false, ok.text);
     assert.equal(fs.realpathSync(ctx.calls().at(-1).cwd), fs.realpathSync(ctx.project));
+  });
+
+  test("reports the files a workspace-write task changed in a git repository", async () => {
+    const repo = path.join(ctx.base, "repo");
+    fs.mkdirSync(repo);
+    assert.equal(spawnSync("git", ["init", "-q", repo]).status, 0);
+    fs.writeFileSync(path.join(repo, "untouched.txt"), "dirty before the task");
+    const out = path.join(repo, "codex-out.txt");
+    const same = (list, files) =>
+      assert.deepEqual(
+        list.map((f) => fs.realpathSync(f)),
+        files.map((f) => fs.realpathSync(f)),
+      );
+
+    const first = await client.call("codex_task", { prompt: "WRITE a file", cwd: repo });
+    same(first.json.changed_files, [out]);
+    // Already untracked before the second run: detected through its mtime.
+    const second = await client.call("codex_task", { prompt: "WRITE again", cwd: repo });
+    same(second.json.changed_files, [out]);
+    const quiet = await client.call("codex_task", { prompt: "no edits", cwd: repo });
+    assert.deepEqual(quiet.json.changed_files, []);
+
+    const ro = await client.call("codex_task", { prompt: "look", cwd: repo, sandbox: "read-only" });
+    assert.equal(ro.json.changed_files, undefined);
+    const noRepo = await client.call("codex_task", { prompt: "WRITE here", cwd: ctx.project });
+    assert.equal(noRepo.json.changed_files, undefined);
   });
 
   test("validates input before spawning anything", async () => {

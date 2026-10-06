@@ -125,7 +125,7 @@ node src/cli.mjs --check
 | `codex_jobs` | List recent jobs | — |
 | `codex_models` | Models available to your account + configured default | `include_hidden` |
 
-Results are JSON with `status` (`queued` · `running` · `completed` · `failed` · `cancelled`), `final_message`, `session_id`, `usage`, `files` (images), and `errors` / `stderr_tail` on failure.
+Results are JSON with `status` (`queued` · `running` · `completed` · `failed` · `cancelled`), `final_message`, `session_id`, `usage`, `files` (images), `changed_files` (workspace-write tasks in a git repository: absolute paths whose git status or mtime changed during the run), `warnings` (e.g. a requested transparent image without alpha), and `errors` / `stderr_tail` on failure.
 
 ## Things to ask Claude
 

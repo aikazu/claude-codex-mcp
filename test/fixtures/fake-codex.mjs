@@ -6,7 +6,8 @@
 // Prompt keywords: FAIL → turn.failed + exit 1, SLOW → 4 s delay, HANG → never exits,
 // LOOSE → images land outside the thread folder and are not reported, while
 // another session (e.g. the Codex desktop app) writes one at the same time,
-// OPAQUE → images are RGB PNGs without an alpha channel.
+// OPAQUE → images are RGB PNGs without an alpha channel,
+// WRITE → appends a line to codex-out.txt in the working folder.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -89,6 +90,7 @@ function run(input) {
         fs.writeFileSync(path.join(other, "foreign.png"), PNG_1PX);
       }
     }
+    if (input.includes("WRITE")) fs.appendFileSync(path.join(process.cwd(), "codex-out.txt"), "x\n");
     if (input.includes("FAIL")) {
       emit({ type: "turn.failed", error: { message: "You've hit your usage limit." } });
       console.error("simulated failure");
