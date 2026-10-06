@@ -185,6 +185,7 @@ Pick whatever fits; this one aims to be the single, auditable server that covers
 | Tools don't appear in Claude Desktop | Quit from the tray / menu bar (closing the window is not enough) and reopen. Check the app's MCP logs. |
 | Calls return `running` | Normal for long runs; Claude polls with `codex_job`. Raise `CODEX_MCP_WAIT` if your client allows long tool calls. |
 | `usage limit` errors | Your Codex quota is spent; it resets on your plan's schedule. |
+| Codex reports `CreateProcessWithLogonW failed: 267` (Windows) | Codex's `workspace-write` sandbox could not start a shell in `cwd`. Seen with folders under `AppData\Roaming`; use a project folder elsewhere, or `read-only`. |
 | No image found after a job | Make sure the job wasn't cancelled and that `CODEX_HOME` matches the Codex install that ran. |
 
 ## Development
