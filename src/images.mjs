@@ -88,8 +88,28 @@ export function collectImages(job, generatedImagesDir) {
     const dest = uniquePath(job.meta.outDir, base, path.extname(f.p).toLowerCase());
     fs.copyFileSync(f.p, dest);
     job.files.push({ path: dest, source: f.p, bytes: fs.statSync(dest).size });
+    if (job.meta.transparent && pngHasAlpha(dest) === false)
+      job.warnings.push(`${path.basename(dest)} has no alpha channel: the background is not transparent`);
   }
   if (list.length === 0) job.errors.push(`Codex finished but no new image was found in ${generatedImagesDir}`);
+}
+
+/** Whether a PNG carries transparency (alpha color type or tRNS); undefined for other formats. */
+export function pngHasAlpha(file) {
+  let buf;
+  try {
+    buf = fs.readFileSync(file);
+  } catch {
+    return undefined;
+  }
+  if (buf.length < 33 || buf.toString("latin1", 1, 4) !== "PNG") return undefined;
+  if (buf[25] === 4 || buf[25] === 6) return true;
+  for (let off = 8; off + 8 <= buf.length; off += 12 + buf.readUInt32BE(off)) {
+    const type = buf.toString("latin1", off + 4, off + 8);
+    if (type === "tRNS") return true;
+    if (type === "IDAT" || type === "IEND") return false;
+  }
+  return false;
 }
 
 export function previewContent(files, { maxBytes, maxCount }) {

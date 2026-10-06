@@ -96,6 +96,7 @@ export class JobManager {
       finalMessage: "",
       usage: null,
       errors: [],
+      warnings: [],
       stderr: "",
       mentionedPaths: new Set(),
       files: [],

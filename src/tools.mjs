@@ -112,14 +112,9 @@ export function buildImageArgs(a, config) {
     ...effortArg(str(a.reasoning_effort) ?? config.imageEffort),
   );
   for (const r of refs) args.push("-i", r);
-  const prompt = buildImagePrompt({
-    brief,
-    count,
-    size: str(a.size),
-    transparent: a.transparent === true,
-    referenceCount: refs.length,
-  });
-  return { args, prompt, outDir, brief, count };
+  const transparent = a.transparent === true;
+  const prompt = buildImagePrompt({ brief, count, size: str(a.size), transparent, referenceCount: refs.length });
+  return { args, prompt, outDir, brief, count, transparent };
 }
 
 function waitSeconds(v, config) {
@@ -147,6 +142,7 @@ export function summarize(job) {
   if (job.finalMessage) s.final_message = job.finalMessage;
   if (job.usage) s.usage = job.usage;
   if (job.errors.length) s.errors = job.errors;
+  if (job.warnings?.length) s.warnings = job.warnings;
   if (job.status === "failed" && job.stderr) s.stderr_tail = tail(job.stderr, 2500);
   if (job.kind === "task" && job.status === "completed" && job.sessionId)
     s.next = "Pass session_id to codex_task to continue this Codex session.";
@@ -318,13 +314,13 @@ export function createToolHandler({ config, jobs, launcher, sessions = new Sessi
     },
 
     async codex_image(a, ctx) {
-      const { args, prompt, outDir, brief, count } = buildImageArgs(a, config);
+      const { args, prompt, outDir, brief, count, transparent } = buildImageArgs(a, config);
       const job = jobs.submit({
         kind: "image",
         args,
         cwd: outDir,
         prompt,
-        meta: { outDir, brief, count, name: str(a.name), returnImages: a.return_images !== false },
+        meta: { outDir, brief, count, transparent, name: str(a.name), returnImages: a.return_images !== false },
         onFinish: (j) => collectImages(j, config.generatedImagesDir),
       });
       return resultFor(await jobs.wait(job, waitSeconds(a.wait_seconds, config), ctx.progress), config);

@@ -251,6 +251,29 @@ describe("codex_image", () => {
     assert.equal(r.images.length, 0);
   });
 
+  test("warns when a transparent image comes back without an alpha channel", async () => {
+    const out = path.join(ctx.base, "alpha");
+    const ok = await client.call("codex_image", {
+      prompt: "icon",
+      transparent: true,
+      out_dir: out,
+      return_images: false,
+    });
+    assert.equal(ok.json.warnings, undefined);
+    const bad = await client.call("codex_image", {
+      prompt: "OPAQUE icon",
+      transparent: true,
+      out_dir: out,
+      return_images: false,
+    });
+    assert.equal(bad.json.status, "completed");
+    assert.equal(bad.isError, false);
+    assert.equal(bad.json.warnings.length, 1);
+    assert.match(bad.json.warnings[0], /no alpha channel/);
+    const plain = await client.call("codex_image", { prompt: "OPAQUE photo", out_dir: out, return_images: false });
+    assert.equal(plain.json.warnings, undefined);
+  });
+
   test("unattributed images never include another session's output", async () => {
     const r = await client.call("codex_image", {
       prompt: "LOOSE banner",

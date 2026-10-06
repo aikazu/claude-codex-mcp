@@ -5,7 +5,8 @@
 //
 // Prompt keywords: FAIL → turn.failed + exit 1, SLOW → 4 s delay, HANG → never exits,
 // LOOSE → images land outside the thread folder and are not reported, while
-// another session (e.g. the Codex desktop app) writes one at the same time.
+// another session (e.g. the Codex desktop app) writes one at the same time,
+// OPAQUE → images are RGB PNGs without an alpha channel.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -13,6 +14,10 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const PNG_1PX = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "base64",
+);
+const PNG_1PX_RGB = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC",
   "base64",
 );
 
@@ -75,7 +80,7 @@ function run(input) {
       fs.mkdirSync(dir, { recursive: true });
       for (let i = 0; i < n; i++) {
         const p = path.join(dir, `ig_${i}.png`);
-        fs.writeFileSync(p, PNG_1PX);
+        fs.writeFileSync(p, input.includes("OPAQUE") ? PNG_1PX_RGB : PNG_1PX);
         if (!loose) emit({ type: "item.completed", item: { type: "image_generation", saved_path: p } });
       }
       if (loose) {
