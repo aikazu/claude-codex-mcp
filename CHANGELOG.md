@@ -16,6 +16,12 @@ All notable changes to this project are documented here. The format follows
 - `codex_image` with `transparent: true` checks each PNG for an alpha channel and returns `warnings` for images that
   came back opaque (e.g. a painted checkerboard).
 
+### Changed
+
+- The server `instructions` now carry the core delegation guidance (when to delegate, explicit model choice, sandbox
+  choice, briefing, verification), since installs outside the Claude Code plugin never receive the `codex-delegation`
+  skill. The skill is updated for the new defaults, `changed_files` and `warnings`.
+
 ### Fixed
 
 - Resuming a session without `cwd` ran Codex in the home folder, which `workspace-write` then made writable. Resume now

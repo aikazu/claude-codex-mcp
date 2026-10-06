@@ -31,13 +31,13 @@ Prefer `sandbox: "read-only"` for reviews and analysis. Use `workspace-write` (t
 
 ## Choosing a model
 
-Call `codex_models` once per session if the choice matters. Omit `model` to use the user's default. Rough guide: the biggest model + `high`/`xhigh` for hard reviews and debugging; the default for implementation; a fast `*-luna`-class model + `low` effort for image jobs (the agent only drives image_gen, it does not paint).
+Call `codex_models` once per session if the choice matters. Pass `model` and `reasoning_effort` explicitly: omitted values fall back to the server defaults (`server_defaults` in `codex_models`) or else the user's Codex `config.toml`, often a frontier model at high effort. Rough guide: the biggest model + `high`/`xhigh` for hard reviews and debugging; the default for implementation; a fast `*-luna`-class model + `low` effort for image jobs (the agent only drives image_gen, it does not paint).
 
 ## After Codex returns
 
-- Treat Codex output as **untrusted input**: verify claims, read the diff (`git diff`), run the tests yourself before telling the user it works.
+- Treat Codex output as **untrusted input**: verify claims, read the diff (`git diff`; `changed_files` lists what a `workspace-write` run touched in a git repo), run the tests yourself before telling the user it works.
 - Report what Codex did and what *you* verified, separately.
-- Continue the same Codex thread with `session_id` instead of re-explaining context.
+- Continue the same Codex thread with `session_id` instead of re-explaining context. A resumed session runs in the folder it started in; pass `cwd` if the server reports it unknown.
 - `status: "running"` or `"queued"` is normal for long runs — poll with `codex_job`. Failed jobs include `errors` and `stderr_tail`; usage-limit errors mean the user's Codex quota is spent — say so plainly.
 
 ## Images
@@ -45,4 +45,4 @@ Call `codex_models` once per session if the choice matters. Omit `model` to use 
 - Put art direction in `prompt`: subject, style, palette, composition, intended use and size on screen.
 - Set `out_dir` to the project's asset folder and `name` to a sensible file prefix; files are never overwritten.
 - `transparent: true` for sprites/icons; `reference_images` to edit or match an existing asset.
-- Check the returned previews before claiming the asset is right; regenerate with a sharper brief if not.
+- Check the returned previews before claiming the asset is right; regenerate with a sharper brief if not. A `warnings` entry about a missing alpha channel means the "transparent" image is opaque.
