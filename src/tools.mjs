@@ -94,7 +94,7 @@ export function buildTaskArgs(a, config, sessions) {
   }
   if (a.network === true && sandbox === "workspace-write")
     args.push("-c", "sandbox_workspace_write.network_access=true");
-  args.push(...modelArg(a.model), ...effortArg(a.reasoning_effort));
+  args.push(...modelArg(str(a.model) ?? config.taskModel), ...effortArg(str(a.reasoning_effort) ?? config.taskEffort));
   for (const img of strList(a.images)) args.push("-i", existingPath(img, "image"));
   return { args, cwd, sandbox, sessionId, addDirs };
 }
@@ -107,7 +107,10 @@ export function buildImageArgs(a, config) {
   const outDir = existingPath(str(a.out_dir) || config.assetDir, "out_dir", { dir: true, create: true });
   const refs = strList(a.reference_images).map((r) => existingPath(r, "reference image"));
   const args = ["exec", "--json", "--skip-git-repo-check", "-C", outDir, "-s", "read-only"];
-  args.push(...modelArg(a.model), ...effortArg(a.reasoning_effort));
+  args.push(
+    ...modelArg(str(a.model) ?? config.imageModel),
+    ...effortArg(str(a.reasoning_effort) ?? config.imageEffort),
+  );
   for (const r of refs) args.push("-i", r);
   const prompt = buildImagePrompt({
     brief,
@@ -158,16 +161,24 @@ function resultFor(job, config) {
   return { content, isError: job.status === "failed" };
 }
 
+/** Model / effort the server applies when a call omits them (unset → Codex's config.toml). */
+export function serverDefaults(config) {
+  return {
+    task: { model: config.taskModel, reasoning_effort: config.taskEffort },
+    image: { model: config.imageModel, reasoning_effort: config.imageEffort },
+  };
+}
+
 export function toolDefinitions(config) {
   const wait = {
     type: "number",
     description: `Seconds to wait before returning a job_id (0-${MAX_WAIT_SECONDS}, default ${config.defaultWaitSeconds}).`,
   };
-  const effort = {
+  const fallback = (value) => (value ? `server default ${value}` : "the user's Codex default");
+  const effort = (value) => ({
     type: "string",
-    description:
-      "low | medium | high | xhigh | max | ultra — support varies per model (see codex_models). Omit for the default.",
-  };
+    description: `low | medium | high | xhigh | max | ultra — support varies per model (see codex_models). Omit for ${fallback(value)}.`,
+  });
   return [
     {
       name: "codex_task",
@@ -198,9 +209,9 @@ export function toolDefinitions(config) {
           },
           model: {
             type: "string",
-            description: "Codex model slug (see codex_models). Omit to use the user's default.",
+            description: `Codex model slug (see codex_models). Omit for ${fallback(config.taskModel)}.`,
           },
-          reasoning_effort: effort,
+          reasoning_effort: effort(config.taskEffort),
           images: { type: "array", items: { type: "string" }, description: "Absolute paths of images to attach." },
           add_dirs: {
             type: "array",
@@ -241,9 +252,10 @@ export function toolDefinitions(config) {
           model: {
             type: "string",
             description:
-              "Model for the Codex agent turn that calls image_gen (not the image model). A fast model is enough.",
+              "Model for the Codex agent turn that calls image_gen (not the image model). A fast model is enough. " +
+              `Omit for ${fallback(config.imageModel)}.`,
           },
-          reasoning_effort: effort,
+          reasoning_effort: effort(config.imageEffort),
           return_images: { type: "boolean", description: "Embed previews in the result (default true)." },
           wait_seconds: wait,
         },
@@ -342,6 +354,7 @@ export function createToolHandler({ config, jobs, launcher, sessions = new Sessi
 
     async codex_models(a) {
       const data = listModels(launcher(), config.codexHome, { includeHidden: a.include_hidden === true });
+      data.server_defaults = serverDefaults(config);
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     },
   };

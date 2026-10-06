@@ -296,6 +296,62 @@ describe("codex_models", () => {
   });
 });
 
+describe("server defaults", () => {
+  let ctx;
+  let client;
+  before(async () => {
+    ctx = makeEnv({
+      CODEX_MCP_TASK_MODEL: "fake-pro",
+      CODEX_MCP_TASK_EFFORT: "low",
+      CODEX_MCP_IMAGE_MODEL: "fake-mini",
+      CODEX_MCP_IMAGE_EFFORT: "medium",
+    });
+    client = new Client(ctx.env);
+    await client.init();
+  });
+  after(() => client.close());
+
+  test("apply only when a call omits model / reasoning_effort", async () => {
+    await client.call("codex_task", { prompt: "x", cwd: ctx.project });
+    let joined = ctx.calls().at(-1).args.join(" ");
+    assert.match(joined, /-m fake-pro/);
+    assert.match(joined, /model_reasoning_effort="low"/);
+
+    await client.call("codex_task", { prompt: "x", cwd: ctx.project, model: "other", reasoning_effort: "high" });
+    joined = ctx.calls().at(-1).args.join(" ");
+    assert.match(joined, /-m other/);
+    assert.match(joined, /model_reasoning_effort="high"/);
+    assert.doesNotMatch(joined, /fake-pro/);
+
+    await client.call("codex_image", { prompt: "icon", return_images: false });
+    joined = ctx.calls().at(-1).args.join(" ");
+    assert.match(joined, /-m fake-mini/);
+    assert.match(joined, /model_reasoning_effort="medium"/);
+  });
+
+  test("are reported by codex_models and in tool descriptions", async () => {
+    const r = await client.call("codex_models");
+    assert.deepEqual(r.json.server_defaults, {
+      task: { model: "fake-pro", reasoning_effort: "low" },
+      image: { model: "fake-mini", reasoning_effort: "medium" },
+    });
+    const { tools } = (await client.request("tools/list")).result;
+    const task = tools.find((t) => t.name === "codex_task");
+    assert.match(task.inputSchema.properties.model.description, /server default fake-pro/);
+  });
+
+  test("an invalid default fails the call instead of reaching Codex", async () => {
+    const bad = makeEnv({ CODEX_MCP_TASK_MODEL: "a b" });
+    const c = new Client(bad.env);
+    await c.init();
+    const r = await c.call("codex_task", { prompt: "x", cwd: bad.project });
+    assert.equal(r.isError, true);
+    assert.match(r.text, /invalid model/);
+    assert.equal(bad.calls().length, 0);
+    await c.close();
+  });
+});
+
 describe("missing Codex", () => {
   test("tool calls fail with an actionable message", async () => {
     const ctx = makeEnv({ CODEX_BIN: path.join(makeEnv().base, "nope", "codex") });

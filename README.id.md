@@ -46,7 +46,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 macOS / Linux: `./scripts/install.sh`. Setelah itu **Quit** Claude Desktop dari tray lalu buka lagi.
 
-Opsi: `-AssetDir`, `-Sandbox read-only`, `-DryRun`, `-Uninstall`. Cek kapan saja dengan `node src/cli.mjs --check`.
+Opsi: `-AssetDir`, `-Sandbox read-only`, `-TaskModel`/`-TaskEffort` dan `-ImageModel`/`-ImageEffort` (default model bila Claude tidak menyebutkannya; tanpa ini Codex memakai `config.toml`-mu), `-DryRun`, `-Uninstall`. Cek kapan saja dengan `node src/cli.mjs --check`.
 
 ## Contoh permintaan
 

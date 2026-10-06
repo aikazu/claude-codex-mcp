@@ -23,6 +23,9 @@ const getLauncher = () => {
   return launcher;
 };
 
+const describeDefault = (model, effort) =>
+  model || effort ? [model, effort].filter(Boolean).join(" / ") : "Codex config.toml";
+
 function check() {
   const lines = [];
   let ok = true;
@@ -48,6 +51,8 @@ function check() {
     `default sandbox:  ${config.defaultSandbox}`,
     `default wait:     ${config.defaultWaitSeconds}s`,
     `concurrency:      ${config.maxConcurrentTasks} task(s), ${config.maxConcurrentImages} image job(s)`,
+    `task default:     ${describeDefault(config.taskModel, config.taskEffort)}`,
+    `image default:    ${describeDefault(config.imageModel, config.imageEffort)}`,
     `node:             ${process.version} (${process.execPath})`,
   );
   process.stderr.write(`claude-codex-mcp ${pkg.version}\n${lines.join("\n")}\n${ok ? "OK" : "PROBLEMS FOUND"}\n`);

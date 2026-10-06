@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Server-side defaults for calls that omit `model` / `reasoning_effort`: `CODEX_MCP_TASK_MODEL`, `CODEX_MCP_TASK_EFFORT`,
+  `CODEX_MCP_IMAGE_MODEL`, `CODEX_MCP_IMAGE_EFFORT` (installer: `--task-model` … / `-TaskModel` …). Shown by
+  `codex_models` (`server_defaults`), `--check` and the tool descriptions.
+
 ### Fixed
 
 - Resuming a session without `cwd` ran Codex in the home folder, which `workspace-write` then made writable. Resume now

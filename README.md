@@ -89,7 +89,7 @@ macOS / Linux:
 
 The installer checks Node and your Codex login, then registers the server as `codex` in every `claude_desktop_config.json` it finds (standard and Microsoft Store installs, with a timestamped backup) and in Claude Code (`claude mcp add -s user`). It pins absolute paths for `node` and `codex`, because GUI apps often start MCP servers with a minimal `PATH`. Fully quit and reopen Claude Desktop afterwards.
 
-Options: `-AssetDir <dir>` / `--asset-dir`, `-Sandbox read-only` / `--sandbox`, `-DryRun` / `--dry-run`, `-Uninstall` / `--uninstall`.
+Options: `-AssetDir <dir>` / `--asset-dir`, `-Sandbox read-only` / `--sandbox`, `-TaskModel` / `--task-model`, `-TaskEffort` / `--task-effort`, `-ImageModel` / `--image-model`, `-ImageEffort` / `--image-effort`, `-DryRun` / `--dry-run`, `-Uninstall` / `--uninstall`.
 
 ### Option C — manual config
 
@@ -144,6 +144,8 @@ Environment variables (set them in the MCP server entry):
 | `CODEX_HOME` | `~/.codex` | Codex home (auth, config, `generated_images`) |
 | `CODEX_MCP_SANDBOX` | `workspace-write` | Default sandbox for `codex_task` (`read-only` or `workspace-write`) |
 | `CODEX_MCP_ASSET_DIR` | `~/Pictures/codex-assets` | Default `out_dir` for images |
+| `CODEX_MCP_TASK_MODEL` / `CODEX_MCP_TASK_EFFORT` | Codex `config.toml` | `model` / `reasoning_effort` for `codex_task` calls that omit them |
+| `CODEX_MCP_IMAGE_MODEL` / `CODEX_MCP_IMAGE_EFFORT` | Codex `config.toml` | Same for `codex_image`; a fast model at `low` is enough, the agent only drives image_gen |
 | `CODEX_MCP_WAIT` | `50` | Default seconds a call waits before returning a `job_id` (max 240) |
 | `CODEX_MCP_MAX_TASKS` | `3` | Concurrent `codex_task` runs; extra jobs queue |
 | `CODEX_MCP_MAX_IMAGES` | `1` | Concurrent image jobs (keep 1 for reliable attribution) |

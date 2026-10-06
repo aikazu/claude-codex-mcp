@@ -2,6 +2,7 @@
 # claude-codex-mcp installer for macOS / Linux.
 #
 #   ./scripts/install.sh [--uninstall] [--dry-run] [--asset-dir DIR] [--sandbox read-only]
+#                        [--task-model SLUG] [--task-effort EFFORT] [--image-model SLUG] [--image-effort EFFORT]
 #
 # Thin wrapper around scripts/register.mjs.
 set -eu

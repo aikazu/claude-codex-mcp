@@ -24,6 +24,11 @@ export function loadConfig() {
     generatedImagesDir: path.join(codexHome, "generated_images"),
     defaultSandbox: SANDBOXES.includes(sandbox) ? sandbox : "workspace-write",
     assetDir: env("ASSET_DIR") || path.join(os.homedir(), "Pictures", "codex-assets"),
+    // Used when a call omits model / reasoning_effort; unset falls back to Codex's config.toml.
+    taskModel: env("TASK_MODEL") || undefined,
+    taskEffort: env("TASK_EFFORT") || undefined,
+    imageModel: env("IMAGE_MODEL") || undefined,
+    imageEffort: env("IMAGE_EFFORT") || undefined,
     defaultWaitSeconds: clampInt(env("WAIT") ?? env("WAIT_SECONDS"), 50, 0, MAX_WAIT_SECONDS),
     maxConcurrentTasks: clampInt(env("MAX_TASKS"), 3, 1, 16),
     // Images are attributed by scanning $CODEX_HOME/generated_images, so they

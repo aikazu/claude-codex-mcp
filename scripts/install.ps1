@@ -10,7 +10,11 @@ param(
   [switch]$DryRun,
   [string]$Name = "codex",
   [string]$AssetDir,
-  [string]$Sandbox = ""
+  [string]$Sandbox = "",
+  [string]$TaskModel,
+  [string]$TaskEffort,
+  [string]$ImageModel,
+  [string]$ImageEffort
 )
 $ErrorActionPreference = "Stop"
 
@@ -26,6 +30,10 @@ if ($Uninstall) { $argsList += "--uninstall" }
 if ($DryRun) { $argsList += "--dry-run" }
 if ($AssetDir) { $argsList += @("--asset-dir", $AssetDir) }
 if ($Sandbox) { $argsList += @("--sandbox", $Sandbox) }
+if ($TaskModel) { $argsList += @("--task-model", $TaskModel) }
+if ($TaskEffort) { $argsList += @("--task-effort", $TaskEffort) }
+if ($ImageModel) { $argsList += @("--image-model", $ImageModel) }
+if ($ImageEffort) { $argsList += @("--image-effort", $ImageEffort) }
 
 # Native tools may write to stderr; under "Stop" Windows PowerShell 5.1 would
 # turn that into a terminating error, so relax it for the child process.

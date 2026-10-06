@@ -3,6 +3,8 @@
 //
 //   node scripts/register.mjs [--uninstall] [--dry-run] [--name codex]
 //                             [--asset-dir <dir>] [--sandbox workspace-write|read-only]
+//                             [--task-model <slug>] [--task-effort <effort>]
+//                             [--image-model <slug>] [--image-effort <effort>]
 //
 // Claude Desktop: adds an entry to every claude_desktop_config.json it finds
 // (standard and Microsoft Store locations), after writing a timestamped backup.
@@ -21,8 +23,15 @@ const IS_WIN = process.platform === "win32";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SERVER = path.join(ROOT, "src", "cli.mjs");
 
+const DEFAULT_FLAGS = {
+  "--task-model": "CODEX_MCP_TASK_MODEL",
+  "--task-effort": "CODEX_MCP_TASK_EFFORT",
+  "--image-model": "CODEX_MCP_IMAGE_MODEL",
+  "--image-effort": "CODEX_MCP_IMAGE_EFFORT",
+};
+
 function parseArgs(argv) {
-  const opts = { uninstall: false, dryRun: false, name: "codex", assetDir: null, sandbox: null };
+  const opts = { uninstall: false, dryRun: false, name: "codex", assetDir: null, sandbox: null, defaults: {} };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--uninstall") opts.uninstall = true;
@@ -30,12 +39,13 @@ function parseArgs(argv) {
     else if (a === "--name") opts.name = argv[++i];
     else if (a === "--asset-dir") opts.assetDir = path.resolve(argv[++i]);
     else if (a === "--sandbox") opts.sandbox = argv[++i];
+    else if (Object.hasOwn(DEFAULT_FLAGS, a)) opts.defaults[DEFAULT_FLAGS[a]] = argv[++i];
     else if (a === "--help" || a === "-h") {
       console.log(
         fs
           .readFileSync(fileURLToPath(import.meta.url), "utf8")
           .split("\n")
-          .slice(1, 12)
+          .slice(1, 14)
           .join("\n"),
       );
       process.exit(0);
@@ -44,6 +54,10 @@ function parseArgs(argv) {
   if (!/^[\w-]+$/.test(opts.name)) throw new Error(`Invalid --name: ${opts.name}`);
   if (opts.sandbox && !["workspace-write", "read-only"].includes(opts.sandbox))
     throw new Error("--sandbox must be workspace-write or read-only");
+  for (const [key, value] of Object.entries(opts.defaults)) {
+    const valid = key.endsWith("_MODEL") ? /^[\w.:/-]+$/ : /^[a-z]+$/;
+    if (!valid.test(value ?? "")) throw new Error(`Invalid value for ${key}: ${value}`);
+  }
   return opts;
 }
 
@@ -157,6 +171,7 @@ function main() {
       warn(`Codex is not logged in (${text || `exit ${login.status}`}). Run \`codex login\` before using the tools.`);
     if (opts.assetDir) env.CODEX_MCP_ASSET_DIR = opts.assetDir;
     if (opts.sandbox) env.CODEX_MCP_SANDBOX = opts.sandbox;
+    Object.assign(env, opts.defaults);
   }
   say();
 
