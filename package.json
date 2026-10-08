@@ -1,6 +1,6 @@
 {
   "name": "@aikazu/claude-codex-mcp",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "MCP server that lets Claude delegate coding work and image generation to OpenAI Codex through the Codex CLI and your own ChatGPT/Codex subscription. Zero dependencies, Windows-first, works in Claude Desktop, Cowork and Claude Code.",
   "type": "module",
   "bin": {

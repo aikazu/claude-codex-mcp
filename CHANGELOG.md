@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-08
+
 ### Added
 
 - Server-side defaults for calls that omit `model` / `reasoning_effort`: `CODEX_MCP_TASK_MODEL`, `CODEX_MCP_TASK_EFFORT`,
@@ -35,7 +37,7 @@ All notable changes to this project are documented here. The format follows
   `generated_images`, including other Codex clients' output. It now skips other threads' folders and keeps at most
   `count` files.
 
-## [1.0.0] - 2026-10-05
+## [0.1.0] - 2026-10-05
 
 ### Added
 
@@ -48,4 +50,5 @@ All notable changes to this project are documented here. The format follows
 - Claude Code plugin + marketplace manifests and the `codex-delegation` skill.
 - Test suite against a fake Codex CLI; CI on Windows, macOS and Linux.
 
-[1.0.0]: https://github.com/aikazu/claude-codex-mcp/releases/tag/v1.0.0
+[0.2.0]: https://github.com/aikazu/claude-codex-mcp/releases/tag/v0.2.0
+[0.1.0]: https://github.com/aikazu/claude-codex-mcp/releases/tag/v0.1.0
