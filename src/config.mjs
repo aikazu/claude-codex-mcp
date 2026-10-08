@@ -19,6 +19,7 @@ export function loadConfig() {
   const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
   const sandbox = env("SANDBOX");
   return Object.freeze({
+    windows: process.platform === "win32",
     codexBin: process.env.CODEX_BIN || null,
     codexHome,
     generatedImagesDir: path.join(codexHome, "generated_images"),

@@ -6,6 +6,7 @@ import { launcherFor } from "../src/codex-bin.mjs";
 import { buildImagePrompt, slug } from "../src/images.mjs";
 import { applyEvent } from "../src/jobs.mjs";
 import { normalizeCatalog } from "../src/models.mjs";
+import { buildImageArgs, buildTaskArgs } from "../src/tools.mjs";
 import { tempDir } from "./helpers.mjs";
 
 const blankJob = () => ({ sessionId: null, messages: [], usage: null, errors: [], mentionedPaths: new Set() });
@@ -82,6 +83,23 @@ describe("helpers", () => {
     assert.match(p, /transparent/);
     assert.match(p, /1 reference image/);
     assert.doesNotMatch(buildImagePrompt({ brief: "a", count: 1 }), /transparent|reference|Size/);
+  });
+
+  test("turns off the desktop app's REPL MCP servers on Windows only", () => {
+    const dir = tempDir();
+    const off = (args) => args.filter((x) => x.startsWith("mcp_servers.")).sort();
+    const expected = [
+      'mcp_servers.cua_repl={command="disabled",enabled=false}',
+      'mcp_servers.node_repl={command="disabled",enabled=false}',
+    ];
+    const sessions = { lookup: () => ({ cwd: dir, addDirs: [] }) };
+    for (const windows of [true, false]) {
+      const config = { windows, defaultSandbox: "read-only", assetDir: dir };
+      const want = windows ? expected : [];
+      assert.deepEqual(off(buildTaskArgs({ prompt: "x", cwd: dir }, config).args), want);
+      assert.deepEqual(off(buildTaskArgs({ prompt: "x", session_id: "abc" }, config, sessions).args), want);
+      assert.deepEqual(off(buildImageArgs({ prompt: "x", out_dir: dir }, config).args), want);
+    }
   });
 
   test("normalizeCatalog handles string and object effort lists", () => {

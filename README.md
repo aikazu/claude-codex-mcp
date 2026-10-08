@@ -155,7 +155,7 @@ Environment variables (set them in the MCP server entry):
 ## Security model
 
 - The server is a local stdio process; it opens no ports and stores no credentials. Authentication is entirely the Codex CLI's own login.
-- Codex runs under its own sandbox: `read-only` or `workspace-write` (writes limited to `cwd` plus `add_dirs`, network off unless `network: true`). The bypass/full-access modes are intentionally not exposed.
+- Codex runs under its own sandbox: `read-only` or `workspace-write` (writes limited to `cwd` plus `add_dirs`, network off unless `network: true`). The bypass/full-access modes are intentionally not exposed. On Windows, delegated runs also turn off the Codex desktop app's browser / computer-use REPL servers (`node_repl`, `cua_repl`), which break the sandbox while they run.
 - Arguments are passed as an argv array without a shell; prompts go over stdin. `model`, `reasoning_effort` and `session_id` are validated against strict patterns before they reach Codex.
 - Treat Codex output as untrusted input. The bundled skill tells Claude to verify claims and diffs before relaying them.
 
@@ -186,6 +186,7 @@ Pick whatever fits; this one aims to be the single, auditable server that covers
 | Calls return `running` | Normal for long runs; Claude polls with `codex_job`. Raise `CODEX_MCP_WAIT` if your client allows long tool calls. |
 | `usage limit` errors | Your Codex quota is spent; it resets on your plan's schedule. |
 | Codex reports `CreateProcessWithLogonW failed: 267` (Windows) | Codex's `workspace-write` sandbox could not start a shell in `cwd`. Seen with folders under `AppData\Roaming`; use a project folder elsewhere, or `read-only`. |
+| Codex reports `helper_unknown_error: setup refresh had errors` (Windows) | Codex's sandbox could not update the ACL on the desktop app's `node_repl.exe` while it was running (`os error 32` in `~/.codex/.sandbox/sandbox.<date>.log`). The server turns off the app's `node_repl` / `cua_repl` MCP servers for every run, so this only remains while the Codex desktop app or another Codex session has `node_repl.exe` open: quit the app from the tray and retry. |
 | No image found after a job | Make sure the job wasn't cancelled and that `CODEX_HOME` matches the Codex install that ran. |
 
 ## Development

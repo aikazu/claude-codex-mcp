@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- On Windows with the Codex desktop app installed, every shell command in a delegated run failed with
+  `helper_unknown_error: setup refresh had errors`: the run started the app's `node_repl` / `cua_repl` MCP servers,
+  and Codex's sandbox setup then could not open the running `node_repl.exe` to check its ACL (`os error 32`). Task and
+  image runs now turn both servers off.
 - Resuming a session without `cwd` ran Codex in the home folder, which `workspace-write` then made writable. Resume now
   runs in the folder the session started in (remembered by the server, or read from Codex's session metadata), reapplies
   its `add_dirs`, and refuses when the folder is unknown.

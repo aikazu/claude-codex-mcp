@@ -44,6 +44,19 @@ function modelArg(value) {
   return ["-m", model];
 }
 
+// The Codex desktop app registers MCP servers (config.toml's `node_repl`, the
+// unified-computer-use plugin's `cua_repl`) that start `node_repl.exe` from its
+// runtimes folder. On Windows the sandbox re-validates that folder before every
+// command and fails with "setup refresh had errors" while the exe is running,
+// so delegated runs turn them off. The override must be a full table:
+// `.enabled=false` alone is rejected for a server that is not declared.
+const DESKTOP_REPL_SERVERS = ["node_repl", "cua_repl"];
+
+function desktopReplOff(config) {
+  if (!config.windows) return [];
+  return DESKTOP_REPL_SERVERS.flatMap((name) => ["-c", `mcp_servers.${name}={command="disabled",enabled=false}`]);
+}
+
 const isDir = (p) => {
   try {
     return fs.statSync(p).isDirectory();
@@ -97,6 +110,7 @@ export function buildTaskArgs(a, config, sessions) {
   if (a.network === true && sandbox === "workspace-write")
     args.push("-c", "sandbox_workspace_write.network_access=true");
   args.push(...modelArg(str(a.model) ?? config.taskModel), ...effortArg(str(a.reasoning_effort) ?? config.taskEffort));
+  args.push(...desktopReplOff(config));
   for (const img of strList(a.images)) args.push("-i", existingPath(img, "image"));
   return { args, cwd, sandbox, sessionId, addDirs };
 }
@@ -112,6 +126,7 @@ export function buildImageArgs(a, config) {
   args.push(
     ...modelArg(str(a.model) ?? config.imageModel),
     ...effortArg(str(a.reasoning_effort) ?? config.imageEffort),
+    ...desktopReplOff(config),
   );
   for (const r of refs) args.push("-i", r);
   const transparent = a.transparent === true;
