@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const CLI = path.join(root, "src", "cli.mjs");
-export const FAKE_CODEX = path.join(root, "test", "fixtures", "fake-codex.mjs");
+export const FIXTURES = path.join(root, "test", "fixtures");
+export const FAKE_CODEX = path.join(FIXTURES, "fake-codex.mjs");
 
 export function tempDir(prefix = "ccm-test-") {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));

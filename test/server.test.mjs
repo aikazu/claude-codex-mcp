@@ -222,6 +222,25 @@ describe("jobs", () => {
     assert.equal(c.json.status, "cancelled");
   });
 
+  test("a rejected sandbox setup stops the run and fails the job with an actionable error", async () => {
+    // A log entry written "now", as Codex's sandbox would have; the file does not exist, so no process is named.
+    const locked = path.join(ctx.base, "runtimes", "swift", "VCRUNTIME140_1.dll");
+    const sandboxDir = path.join(ctx.env.CODEX_HOME, ".sandbox");
+    fs.mkdirSync(sandboxDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sandboxDir, "sandbox.2099-01-01.log"),
+      `[${new Date().toISOString()}] runtime read/execute validation failed: validate runtime read/execute access on ${locked}: open ACL target for root-only update: in use (os error 32)\n`,
+    );
+    const r = await client.call("codex_task", { prompt: "SANDBOX review", cwd: ctx.project, wait_seconds: 30 });
+    assert.equal(r.isError, true);
+    assert.equal(r.json.status, "failed");
+    assert.equal(r.json.final_message, undefined, "no blind answer is returned");
+    assert.equal(r.json.errors.length, 1);
+    assert.match(r.json.errors[0], /setup refresh had errors/);
+    assert.ok(r.json.errors[0].includes(locked));
+    assert.match(r.json.errors[0], /Quit it from the tray or end its helper processes/);
+  });
+
   test("codex_jobs lists what ran", async () => {
     const r = await client.call("codex_jobs");
     assert.ok(Array.isArray(r.json));

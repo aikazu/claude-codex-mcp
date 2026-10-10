@@ -9,6 +9,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
+import {
+  diagnoseSandboxLock,
+  sandboxFailureInEvent,
+  sandboxFailureInStderr,
+  sandboxFailureMessage,
+} from "./sandbox.mjs";
 
 const IS_WIN = process.platform === "win32";
 const IMAGE_PATH_RE = /[A-Za-z]:[\\/][^\s"'<>|*?]+?\.(?:png|jpe?g|webp|gif)|\/[^\s"'<>|*?]+?\.(?:png|jpe?g|webp|gif)/gi;
@@ -22,8 +28,12 @@ function collectStrings(value, out = []) {
   return out;
 }
 
-/** Fold one `codex exec --json` event into the job record. Pure; exported for tests. */
+/**
+ * Fold one `codex exec --json` event into the job record. Pure; exported for tests.
+ * Sets `job.sandboxFailure` when the event shows Codex's sandbox rejecting shell commands (see sandbox.mjs).
+ */
 export function applyEvent(job, ev) {
+  if (!job.sandboxFailure && sandboxFailureInEvent(ev)) job.sandboxFailure = true;
   switch (ev?.type) {
     case "thread.started":
       if (ev.thread_id) job.sessionId = ev.thread_id;
@@ -156,9 +166,13 @@ export class JobManager {
       } catch {
         /* non-JSON noise */
       }
+      this.stopOnSandboxFailure(job);
     });
     child.stderr.on("data", (d) => {
-      job.stderr = tail(job.stderr + d.toString(), 8000);
+      const text = d.toString();
+      job.stderr = tail(job.stderr + text, 8000);
+      if (!job.sandboxFailure && text.split(/\r?\n/).some(sandboxFailureInStderr)) job.sandboxFailure = true;
+      this.stopOnSandboxFailure(job);
     });
     child.on("error", (err) => job.errors.push(`spawn failed: ${err.message}`));
     child.on("close", (code) => this.finish(job, code, tmpDir, outFile));
@@ -167,6 +181,18 @@ export class JobManager {
     // flags such as -i stay unambiguous) and no shell quoting, ever.
     child.stdin.on("error", () => {});
     child.stdin.end(job.prompt);
+  }
+
+  /**
+   * Codex keeps going blind once its sandbox rejects every shell command, burning tokens on guesses.
+   * Stop the run at the first sign; `finish` turns it into a failed job with an actionable error.
+   */
+  stopOnSandboxFailure(job) {
+    if (!job.sandboxFailure || job.sandboxDiagnosis || job.status !== "running") return;
+    this.log(`job ${job.id}: Codex sandbox setup failed, stopping the run`);
+    // Start the lookup before the kill: the process holding the file may be one this job started.
+    job.sandboxDiagnosis = diagnoseSandboxLock({ codexHome: this.config.codexHome, sinceMs: job.startedAt });
+    this.killTree(job);
   }
 
   async finish(job, code, tmpDir, outFile) {
@@ -179,6 +205,11 @@ export class JobManager {
     }
     fs.rm(tmpDir, { recursive: true, force: true }, () => {});
     if (!job.finalMessage) job.finalMessage = job.messages.at(-1) || "";
+    if (job.sandboxFailure && job.status === "running") {
+      // Whatever Codex answered was written without being able to read anything.
+      job.finalMessage = "";
+      job.errors.push(sandboxFailureMessage(await job.sandboxDiagnosis));
+    }
     if (job.status !== "cancelled" && job.onFinish) {
       try {
         await job.onFinish(job);
@@ -212,12 +243,17 @@ export class JobManager {
     }
     if (job.status !== "running" || !job.child) return false;
     job.status = "cancelled";
-    const pid = job.child.pid;
+    this.killTree(job);
+    return true;
+  }
+
+  /** Stop the job's Codex process (and its children). */
+  killTree(job) {
+    const pid = job.child?.pid;
     // On Windows the Node launcher would not forward a kill to codex.exe, so
     // end the whole process tree of this job (and only this job).
     if (IS_WIN && pid) spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { windowsHide: true });
-    else job.child.kill("SIGTERM");
-    return true;
+    else job.child?.kill("SIGTERM");
   }
 
   cancelAll() {

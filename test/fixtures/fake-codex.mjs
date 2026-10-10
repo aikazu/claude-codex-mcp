@@ -7,7 +7,8 @@
 // LOOSE → images land outside the thread folder and are not reported, while
 // another session (e.g. the Codex desktop app) writes one at the same time,
 // OPAQUE → images are RGB PNGs without an alpha channel,
-// WRITE → appends a line to codex-out.txt in the working folder.
+// WRITE → appends a line to codex-out.txt in the working folder,
+// SANDBOX → a shell command is rejected by the Windows sandbox setup, then the run carries on blind for 4 s.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -71,7 +72,21 @@ function run(input) {
     setInterval(() => {}, 1000);
     return;
   }
-  const delay = input.includes("SLOW") ? 4000 : 50;
+  if (input.includes("SANDBOX")) {
+    emit({ type: "item.started", item: { type: "command_execution", command: "ls", status: "in_progress" } });
+    emit({
+      type: "item.completed",
+      item: {
+        type: "command_execution",
+        command: "ls",
+        status: "failed",
+        // Shape captured from codex-cli 0.161.0 while a runtime file was locked.
+        exit_code: -1,
+        aggregated_output: "Failed to create unified exec process: helper_unknown_error: setup refresh had errors",
+      },
+    });
+  }
+  const delay = input.includes("SLOW") || input.includes("SANDBOX") ? 4000 : 50;
   setTimeout(() => {
     if (input.includes("$imagegen")) {
       const n = Number.parseInt(input.match(/create (\d+) image/)?.[1] ?? "1", 10);

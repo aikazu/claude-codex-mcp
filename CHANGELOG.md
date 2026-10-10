@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- On Windows, a run whose sandbox setup fails (`helper_unknown_error: setup refresh had errors`, e.g. because the Codex
+  desktop app's `codex-computer-use-swift.exe` or `node_repl.exe` holds a file under Codex's runtimes folder open) is now
+  stopped at the first rejected command and the job fails with an actionable error, instead of Codex carrying on without
+  reading any files and returning a blind answer after spending hundreds of thousands of tokens. The error names the
+  file from the newest `~/.codex/.sandbox/sandbox.<date>.log` and, when found, the process (name and PID) that has it
+  loaded; the lookup is best effort and bounded to a few seconds.
+
 ## [0.2.0] - 2026-10-08
 
 ### Added
